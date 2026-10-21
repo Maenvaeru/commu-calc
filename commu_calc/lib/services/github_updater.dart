@@ -21,7 +21,7 @@ class ReleaseInfo {
 }
 
 class GitHubUpdater {
-  static const String currentVersion = '1.0.2';
+  static const String currentVersion = '1.0.3';
   static const String owner = 'Maenvaeru';
   static const String repo = 'commu-calc';
   static const String token = '';

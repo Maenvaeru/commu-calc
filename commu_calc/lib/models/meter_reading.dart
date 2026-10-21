@@ -177,9 +177,11 @@ class MeterConsumptionBreakdown {
     double? pct;
     if (currentInputVal != null) {
       currCons = type.isDecimal ? double.parse((currentInputVal - lastVal).toStringAsFixed(4)) : currentInputVal - lastVal;
-      if (prevCons != null && prevCons != 0) {
+      if (prevCons != null) {
         diff = type.isDecimal ? double.parse((currCons - prevCons).toStringAsFixed(4)) : currCons - prevCons;
-        pct = double.parse(((diff / prevCons) * 100.0).toStringAsFixed(1));
+        if (prevCons != 0) {
+          pct = double.parse(((diff / prevCons) * 100.0).toStringAsFixed(1));
+        }
       }
     }
 

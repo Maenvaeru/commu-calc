@@ -38,10 +38,16 @@ function doGet(e) {
         // Если таблица пустая (нет данных)
         if (rows < 2) {
             var defaultHistory = [
+                { date: "21.09.26", lightDay: 4991, lightNight: 2023, heating: 5.365, waterHot: 197, waterCold: 265 },
+                { date: "21.08.26", lightDay: 4828, lightNight: 1970, heating: 5.365, waterHot: 197, waterCold: 259 },
+                { date: "21.07.26", lightDay: 4670, lightNight: 1913, heating: 5.365, waterHot: 191, waterCold: 253 },
+                { date: "21.06.26", lightDay: 4518, lightNight: 1841, heating: 5.365, waterHot: 188, waterCold: 247 },
+                { date: "20.05.26", lightDay: 4367, lightNight: 1775, heating: 5.365, waterHot: 184, waterCold: 241 },
+                { date: "22.04.26", lightDay: 4224, lightNight: 1723, heating: 5.149, waterHot: 181, waterCold: 236 },
+                { date: "20.03.26", lightDay: 4054, lightNight: 1658, heating: 4.721, waterHot: 176, waterCold: 230 },
                 { date: "21.02.26", lightDay: 3917, lightNight: 1609, heating: 4.249, waterHot: 173, waterCold: 225 },
                 { date: "21.01.26", lightDay: 3758, lightNight: 1554, heating: 3.555, waterHot: 170, waterCold: 221 },
-                { date: "22.12.25", lightDay: 3601, lightNight: 1491, heating: 2.9183, waterHot: 166, waterCold: 216 },
-                { date: "20.11.25", lightDay: 3419, lightNight: 1424, heating: 2.3118, waterHot: 162, waterCold: 210 }
+                { date: "22.12.25", lightDay: 3601, lightNight: 1491, heating: 2.918, waterHot: 166, waterCold: 216 }
             ];
             return ContentService.createTextOutput(JSON.stringify({
                 status: "ok",
