@@ -52,12 +52,66 @@ void main() {
       expect(pastDelta, 159);
     });
 
-    test('GitHubUpdater detects published v1.0.1 release from GitHub', () async {
-      final update = await GitHubUpdater.checkForUpdate();
-      expect(update, isNotNull);
-      expect(update!.tagName, 'v1.0.1');
-      expect(update.apkAssetUrl, contains('commu-calc-v1.0.1.apk'));
-      expect(update.apkSize, greaterThan(40000000));
+    test('MeterConsumptionBreakdown calculates past (M-1) and pre-past (M-2) consumption correctly', () async {
+      final storage = MeterStorage();
+      await storage.load();
+
+      // Light Day: last=3917 (21.02), prev=3758 (21.01), prePrev=3601 (22.12)
+      final breakdown = MeterConsumptionBreakdown.calculate(
+        type: MeterType.lightDay,
+        lastReading: storage.lastReading,
+        previousReading: storage.previousReading,
+        prePreviousReading: storage.prePreviousReading,
+        currentInputVal: 4080,
+      );
+
+      // Past consumption (январь -> февраль): 3917 - 3758 = 159
+      expect(breakdown.previousMonthConsumption, 159);
+
+      // Pre-past consumption (декабрь -> январь): 3758 - 3601 = 157
+      expect(breakdown.prePreviousMonthConsumption, 157);
+
+      // Current consumption (февраль -> сейчас): 4080 - 3917 = 163
+      expect(breakdown.currentConsumption, 163);
+
+      // Dynamics: 163 - 159 = +4 к прошлому месяцу (+2.5%)
+      expect(breakdown.deltaDiff, 4);
+      expect(breakdown.isIncreased, isTrue);
+      expect(breakdown.percentChange, closeTo(2.5, 0.1));
+    });
+
+    test('MeterConsumptionBreakdown handles decimal heating consumption correctly', () async {
+      final storage = MeterStorage();
+      await storage.load();
+
+      // Heating: last=4.249 (21.02), prev=3.555 (21.01), prePrev=2.9183 (22.12)
+      final breakdown = MeterConsumptionBreakdown.calculate(
+        type: MeterType.heating,
+        lastReading: storage.lastReading,
+        previousReading: storage.previousReading,
+        prePreviousReading: storage.prePreviousReading,
+        currentInputVal: 4.8000,
+      );
+
+      // Past: 4.249 - 3.555 = 0.694
+      expect(breakdown.previousMonthConsumption, 0.694);
+
+      // Pre-past: 3.555 - 2.9183 = 0.6367
+      expect(breakdown.prePreviousMonthConsumption, 0.6367);
+
+      // Current: 4.8000 - 4.2490 = 0.551
+      expect(breakdown.currentConsumption, 0.551);
+
+      // Diff: 0.551 - 0.694 = -0.143 (economy!)
+      expect(breakdown.deltaDiff, -0.143);
+      expect(breakdown.isDecreased, isTrue);
+    });
+
+    test('GitHubUpdater version comparison logic prevents loops', () {
+      expect(GitHubUpdater.isNewerVersion('v1.0.2', '1.0.1'), isTrue);
+      expect(GitHubUpdater.isNewerVersion('v1.0.1', '1.0.1'), isFalse);
+      expect(GitHubUpdater.isNewerVersion('v1.0.0', '1.0.1'), isFalse);
+      expect(GitHubUpdater.isNewerVersion('v1.0.1', '1.0.2'), isFalse);
     });
   });
 }

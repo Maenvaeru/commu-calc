@@ -25,5 +25,7 @@
 22. **[Flutter UI / Mobile Overflow]:** Вложенный `Row` с непереносимым текстом дельты в заголовке карточки вызывает горизонтальный `RenderFlex` оверфлоу на экранах <360dp. -> Использовать `Expanded` для заголовка и компактный бейдж `Было: X (±Y)`.
 23. **[GitHub API / Empty Repo 422]:** Создание релиза через `POST /repos/{owner}/{repo}/releases` возвращает `422 Repository is empty`, если в репозитории нет коммитов и ветки по умолчанию. -> Сначала выполнить initial commit и `git push -u origin main`.
 24. **[GitHub Push Protection / Secret Scan]:** Git push отклоняется (GH013), если коммит содержит hardcoded PAT token (`ghp_...`). -> Хранить токен локально в `.github_token` (в `.gitignore`), передавать через переменные окружения, в клиенте использовать открытый API для публичных репозиториев без передачи секрета.
+25. **[Android / FileProvider Grant Permission]:** На прошивках MIUI, HyperOS, OneUI системный установщик не может прочитать APK без явного `Context.grantUriPermission(pkg, apkUri, FLAG_GRANT_READ_URI_PERMISSION)` в цикле по активити установщика. -> Выдавать гранты через `queryIntentActivities`.
+26. **[OTA / Download Idempotency & Version Gate]:** Повторное скачивание 47 МБ при каждом клике исключается проверкой размера локального файла (`targetFile.length() == release.apkSize`) и строгой сверкой версий (`isNewerVersion`). -> Использовать локальный кэш перед отправкой запроса на скачивание.
 
 ## Зафиксированные инциденты и решения

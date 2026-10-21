@@ -132,3 +132,63 @@ class ConsumptionTrend {
   bool get isIncreased => (deltaDiff ?? 0) > 0.0001;
   bool get isDecreased => (deltaDiff ?? 0) < -0.0001;
 }
+
+class MeterConsumptionBreakdown {
+  final num? previousMonthConsumption;
+  final num? prePreviousMonthConsumption;
+  final num? currentConsumption;
+  final num? deltaDiff;
+  final double? percentChange;
+
+  const MeterConsumptionBreakdown({
+    this.previousMonthConsumption,
+    this.prePreviousMonthConsumption,
+    this.currentConsumption,
+    this.deltaDiff,
+    this.percentChange,
+  });
+
+  bool get isIncreased => (deltaDiff ?? 0) > 0.0001;
+  bool get isDecreased => (deltaDiff ?? 0) < -0.0001;
+
+  static MeterConsumptionBreakdown calculate({
+    required MeterType type,
+    required MeterReading lastReading,
+    MeterReading? previousReading,
+    MeterReading? prePreviousReading,
+    num? currentInputVal,
+  }) {
+    final lastVal = type.getValue(lastReading);
+    num? prevCons;
+    if (previousReading != null) {
+      final prevVal = type.getValue(previousReading);
+      prevCons = lastVal >= prevVal ? (type.isDecimal ? double.parse((lastVal - prevVal).toStringAsFixed(4)) : lastVal - prevVal) : null;
+    }
+
+    num? prePrevCons;
+    if (previousReading != null && prePreviousReading != null) {
+      final prevVal = type.getValue(previousReading);
+      final prePrevVal = type.getValue(prePreviousReading);
+      prePrevCons = prevVal >= prePrevVal ? (type.isDecimal ? double.parse((prevVal - prePrevVal).toStringAsFixed(4)) : prevVal - prePrevVal) : null;
+    }
+
+    num? currCons;
+    num? diff;
+    double? pct;
+    if (currentInputVal != null) {
+      currCons = type.isDecimal ? double.parse((currentInputVal - lastVal).toStringAsFixed(4)) : currentInputVal - lastVal;
+      if (prevCons != null && prevCons != 0) {
+        diff = type.isDecimal ? double.parse((currCons - prevCons).toStringAsFixed(4)) : currCons - prevCons;
+        pct = double.parse(((diff / prevCons) * 100.0).toStringAsFixed(1));
+      }
+    }
+
+    return MeterConsumptionBreakdown(
+      previousMonthConsumption: prevCons,
+      prePreviousMonthConsumption: prePrevCons,
+      currentConsumption: currCons,
+      deltaDiff: diff,
+      percentChange: pct,
+    );
+  }
+}

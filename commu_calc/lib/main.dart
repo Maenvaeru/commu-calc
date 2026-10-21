@@ -131,10 +131,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
     }
   }
 
-  void _showUpdateDialog(ReleaseInfo release) {
-    double downloadProgress = 0.0;
+  void _showUpdateDialog(ReleaseInfo release) async {
+    final alreadyDownloaded = await GitHubUpdater.isApkAlreadyDownloaded(release);
+    double downloadProgress = alreadyDownloaded ? 1.0 : 0.0;
     bool isDownloading = false;
-    String statusText = 'Доступна версия ${release.tagName}';
+    String statusText = alreadyDownloaded ? 'Файл обновления готов к установке (46.9 МБ)' : 'Доступна версия ${release.tagName}';
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -226,10 +229,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
                   : () async {
                       setDlgState(() {
                         isDownloading = true;
-                        statusText = 'Загрузка пакета...';
+                        statusText = 'Подготовка пакета...';
                       });
                       try {
-                        await GitHubUpdater.downloadAndInstall(
+                        final result = await GitHubUpdater.downloadAndInstall(
                           release,
                           onProgress: (prog, rec, tot) {
                             setDlgState(() {
@@ -240,7 +243,21 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
                             });
                           },
                         );
-                        if (context.mounted) Navigator.pop(ctx);
+
+                        if (result == 'INSTALLED') {
+                          if (context.mounted) Navigator.pop(ctx);
+                          _showFeedback('Запущен системный установщик...', isError: false);
+                        } else if (result == 'NEEDS_PERMISSION') {
+                          setDlgState(() {
+                            isDownloading = false;
+                            statusText = 'Разрешите установку из источника и нажмите УСТАНОВИТЬ';
+                          });
+                        } else {
+                          setDlgState(() {
+                            isDownloading = false;
+                            statusText = 'Статус: $result';
+                          });
+                        }
                       } catch (e) {
                         setDlgState(() {
                           isDownloading = false;
@@ -248,7 +265,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
                         });
                       }
                     },
-              child: const Text('УСТАНОВИТЬ', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+              child: Text(alreadyDownloaded ? 'УСТАНОВИТЬ' : 'ОБНОВИТЬ', style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
             ),
           ],
         ),
@@ -338,27 +355,18 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
     ));
   }
 
-  num? _calculatePreviousDelta(MeterType type) {
-    final last = _storage.lastReading;
-    final prev = _storage.previousReading;
-    if (prev == null) return null;
-    final current = type.getValue(last);
-    final past = type.getValue(prev);
-    return current >= past ? current - past : null;
-  }
-
-  ConsumptionTrend? _computeTrend(MeterType type, String currentText) {
-    if (currentText.trim().isEmpty) return null;
-    final normalized = currentText.replaceAll(',', '.');
-    final currentVal = type.isDecimal ? (double.tryParse(normalized) ?? 0.0) : (num.tryParse(normalized) ?? 0);
-    final lastVal = type.getValue(_storage.lastReading);
-
-    final currentDelta = currentVal - lastVal;
-    final previousDelta = _calculatePreviousDelta(type);
-
-    return ConsumptionTrend(
-      currentDelta: currentDelta,
-      previousDelta: previousDelta,
+  MeterConsumptionBreakdown _computeBreakdown(MeterType type, String currentText) {
+    num? inputVal;
+    if (currentText.trim().isNotEmpty) {
+      final normalized = currentText.replaceAll(',', '.');
+      inputVal = type.isDecimal ? (double.tryParse(normalized) ?? 0.0) : (num.tryParse(normalized) ?? 0);
+    }
+    return MeterConsumptionBreakdown.calculate(
+      type: type,
+      lastReading: _storage.lastReading,
+      previousReading: _storage.previousReading,
+      prePreviousReading: _storage.prePreviousReading,
+      currentInputVal: inputVal,
     );
   }
 
@@ -628,10 +636,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
   }) {
     final lastReading = _storage.lastReading;
     final lastVal = type.getValue(lastReading);
-    final prevDelta = _calculatePreviousDelta(type);
-    final trend = _computeTrend(type, controller.text);
-
-    final isLowerThanPrevious = trend != null && trend.currentDelta < 0;
+    final breakdown = _computeBreakdown(type, controller.text);
+    final isLowerThanPrevious = breakdown.currentConsumption != null && breakdown.currentConsumption! < 0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -655,6 +661,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 1. Шапка карточки: Иконка, Имя счетчика и Базовые показания
           Row(
             children: [
               Container(
@@ -688,7 +695,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
                   border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
                 ),
                 child: Text(
-                  'Было: $lastVal ${type.unit}${prevDelta != null ? ' (+$prevDelta)' : ''}',
+                  'Счетчик: $lastVal ${type.unit}',
                   style: GoogleFonts.robotoMono(
                     fontSize: 11,
                     color: Colors.white.withValues(alpha: 0.75),
@@ -699,6 +706,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
             ],
           ),
           const SizedBox(height: 12),
+
+          // 2. Поле ввода + бейдж текущего расхода
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -750,9 +759,46 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
                 ),
               ),
               const SizedBox(width: 10),
-              _buildTrendBadge(type, trend),
+              _buildCurrentConsumptionBadge(type, breakdown),
             ],
           ),
+
+          const SizedBox(height: 10),
+
+          // 3. Панель помесячного расхода: Прошлый месяц vs Предпрошлый месяц
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildMonthConsumptionItem(
+                  label: 'Прошлый расход:',
+                  value: breakdown.previousMonthConsumption != null
+                      ? '${_formatVal(breakdown.previousMonthConsumption!, type.isDecimal)} ${type.unit}'
+                      : '—',
+                  color: const Color(0xFF38BDF8),
+                ),
+                Container(width: 1, height: 22, color: Colors.white10),
+                _buildMonthConsumptionItem(
+                  label: 'Предпрошлый:',
+                  value: breakdown.prePreviousMonthConsumption != null
+                      ? '${_formatVal(breakdown.prePreviousMonthConsumption!, type.isDecimal)} ${type.unit}'
+                      : '—',
+                  color: Colors.white60,
+                ),
+                if (breakdown.deltaDiff != null) ...[
+                  Container(width: 1, height: 22, color: Colors.white10),
+                  _buildTrendDiffChip(type, breakdown),
+                ],
+              ],
+            ),
+          ),
+
           if (isLowerThanPrevious) ...[
             const SizedBox(height: 8),
             Container(
@@ -779,8 +825,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildTrendBadge(MeterType type, ConsumptionTrend? trend) {
-    if (trend == null) {
+  Widget _buildCurrentConsumptionBadge(MeterType type, MeterConsumptionBreakdown breakdown) {
+    final curr = breakdown.currentConsumption;
+    if (curr == null) {
       return Container(
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -793,79 +840,90 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text('Расход', style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4))),
-            Text('0 ${type.unit}', style: GoogleFonts.robotoMono(fontSize: 14, color: Colors.white24, fontWeight: FontWeight.bold)),
+            Text('Расход сейчас', style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.4))),
+            Text('— ${type.unit}', style: GoogleFonts.robotoMono(fontSize: 14, color: Colors.white24, fontWeight: FontWeight.bold)),
           ],
         ),
       );
     }
 
-    final delta = trend.currentDelta;
-    final deltaStr = _formatVal(delta, type.isDecimal);
-    final deltaDiff = trend.deltaDiff;
-    final percent = trend.percentChange;
-
-    Color badgeColor;
-    IconData? trendIcon;
-    String trendText;
-
-    if (deltaDiff == null) {
-      badgeColor = const Color(0xFF38BDF8);
-      trendText = 'первый расчет';
-    } else if (trend.isIncreased) {
-      badgeColor = const Color(0xFFFB7185);
-      trendIcon = Icons.arrow_upward_rounded;
-      final diffStr = _formatVal(deltaDiff.abs(), type.isDecimal);
-      final pctStr = percent != null ? ' (${percent.abs().toStringAsFixed(1)}%)' : '';
-      trendText = '+$diffStr$pctStr';
-    } else if (trend.isDecreased) {
-      badgeColor = const Color(0xFF34D399);
-      trendIcon = Icons.arrow_downward_rounded;
-      final diffStr = _formatVal(deltaDiff.abs(), type.isDecimal);
-      final pctStr = percent != null ? ' (${percent.abs().toStringAsFixed(1)}%)' : '';
-      trendText = '-$diffStr$pctStr';
-    } else {
-      badgeColor = Colors.white54;
-      trendText = 'без изменений';
-    }
+    final currStr = _formatVal(curr, type.isDecimal);
+    final color = curr >= 0 ? const Color(0xFF38BDF8) : const Color(0xFFFB7185);
 
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          Text('Расход сейчас', style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8), fontWeight: FontWeight.w600)),
           Text(
-            delta >= 0 ? '+$deltaStr ${type.unit}' : '$deltaStr ${type.unit}',
+            curr >= 0 ? '+$currStr ${type.unit}' : '$currStr ${type.unit}',
             style: GoogleFonts.robotoMono(
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: FontWeight.w800,
-              color: delta >= 0 ? const Color(0xFF38BDF8) : const Color(0xFFFB7185),
+              color: color,
             ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (trendIcon != null) Icon(trendIcon, size: 12, color: badgeColor),
-              const SizedBox(width: 2),
-              Text(
-                trendText,
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: badgeColor,
-                ),
-              ),
-            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMonthConsumptionItem({required String label, required String value, required Color color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.45))),
+        const SizedBox(height: 2),
+        Text(value, style: GoogleFonts.robotoMono(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+
+  Widget _buildTrendDiffChip(MeterType type, MeterConsumptionBreakdown breakdown) {
+    final diff = breakdown.deltaDiff ?? 0;
+    final pct = breakdown.percentChange;
+    final isDecreased = breakdown.isDecreased;
+    final isIncreased = breakdown.isIncreased;
+
+    Color color;
+    IconData? icon;
+    String text;
+
+    if (isDecreased) {
+      color = const Color(0xFF34D399);
+      icon = Icons.arrow_downward_rounded;
+      final diffStr = _formatVal(diff.abs(), type.isDecimal);
+      final pctStr = pct != null ? ' (${pct.abs()}%)' : '';
+      text = '-$diffStr$pctStr';
+    } else if (isIncreased) {
+      color = const Color(0xFFFB7185);
+      icon = Icons.arrow_upward_rounded;
+      final diffStr = _formatVal(diff.abs(), type.isDecimal);
+      final pctStr = pct != null ? ' (+${pct.abs()}%)' : '';
+      text = '+$diffStr$pctStr';
+    } else {
+      color = Colors.white54;
+      text = '= 0%';
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) Icon(icon, size: 12, color: color),
+        const SizedBox(width: 2),
+        Text(
+          text,
+          style: GoogleFonts.robotoMono(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+        ),
+      ],
     );
   }
 

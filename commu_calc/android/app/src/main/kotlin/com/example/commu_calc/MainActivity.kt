@@ -18,6 +18,25 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                "canRequestInstall" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        result.success(packageManager.canRequestPackageInstalls())
+                    } else {
+                        result.success(true)
+                    }
+                }
+                "openInstallSettings" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val permissionIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                            data = Uri.parse("package:$packageName")
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        startActivity(permissionIntent)
+                        result.success(true)
+                    } else {
+                        result.success(true)
+                    }
+                }
                 "installApk" -> {
                     val filePath = call.argument<String>("filePath")
                     if (filePath.isNullOrEmpty()) {
@@ -39,7 +58,7 @@ class MainActivity : FlutterActivity() {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 }
                                 startActivity(permissionIntent)
-                                result.success(false) // Открыли экран разрешений
+                                result.success("NEEDS_PERMISSION")
                                 return@setMethodCallHandler
                             }
                         }
@@ -55,8 +74,18 @@ class MainActivity : FlutterActivity() {
                             flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
                         }
 
+                        // Explicitly grant read uri permissions to all matching activities
+                        val resInfoList = packageManager.queryIntentActivities(installIntent, 0)
+                        for (resolveInfo in resInfoList) {
+                            grantUriPermission(
+                                resolveInfo.activityInfo.packageName,
+                                apkUri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+
                         startActivity(installIntent)
-                        result.success(true)
+                        result.success("INSTALLED")
                     } catch (e: Exception) {
                         result.error("INSTALL_ERROR", e.message, null)
                     }

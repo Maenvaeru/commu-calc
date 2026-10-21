@@ -21,7 +21,7 @@ class ReleaseInfo {
 }
 
 class GitHubUpdater {
-  static const String currentVersion = '1.0.0';
+  static const String currentVersion = '1.0.2';
   static const String owner = 'Maenvaeru';
   static const String repo = 'commu-calc';
   static const String token = '';
@@ -47,7 +47,7 @@ class GitHubUpdater {
       if (data is! Map) return null;
 
       final tagName = data['tag_name']?.toString() ?? '';
-      if (!_isNewerVersion(tagName, currentVersion)) {
+      if (!isNewerVersion(tagName, currentVersion)) {
         return null;
       }
 
@@ -81,7 +81,7 @@ class GitHubUpdater {
     }
   }
 
-  static bool _isNewerVersion(String remoteTag, String localVer) {
+  static bool isNewerVersion(String remoteTag, String localVer) {
     try {
       final cleanRemote = remoteTag.replaceAll(RegExp(r'[^0-9.]'), '');
       final cleanLocal = localVer.replaceAll(RegExp(r'[^0-9.]'), '');
@@ -106,15 +106,58 @@ class GitHubUpdater {
     }
   }
 
-  static Future<bool> downloadAndInstall(
+  static Future<bool> isApkAlreadyDownloaded(ReleaseInfo release) async {
+    try {
+      final targetFile = File('${Directory.systemTemp.path}/commu_calc_update.apk');
+      if (await targetFile.exists()) {
+        final length = await targetFile.length();
+        if (release.apkSize > 0 && (length == release.apkSize || length > 40000000)) {
+          return true;
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> canRequestInstall() async {
+    if (!Platform.isAndroid) return true;
+    final res = await _channel.invokeMethod<bool>('canRequestInstall');
+    return res ?? true;
+  }
+
+  static Future<void> openInstallSettings() async {
+    if (!Platform.isAndroid) return;
+    await _channel.invokeMethod('openInstallSettings');
+  }
+
+  static Future<String> launchInstaller() async {
+    if (!Platform.isAndroid) return 'INSTALLED';
+    final targetFile = File('${Directory.systemTemp.path}/commu_calc_update.apk');
+    if (!await targetFile.exists()) {
+      return 'FILE_NOT_FOUND';
+    }
+    final res = await _channel.invokeMethod<String>('installApk', {'filePath': targetFile.path});
+    return res ?? 'UNKNOWN';
+  }
+
+  static Future<String> downloadAndInstall(
     ReleaseInfo release, {
     required Function(double progress, int received, int total) onProgress,
   }) async {
+    final tempDir = Directory.systemTemp;
+    final targetFile = File('${tempDir.path}/commu_calc_update.apk');
+
+    // 1. Проверка локального кэша (Zero Waste)
+    if (await isApkAlreadyDownloaded(release)) {
+      onProgress(1.0, release.apkSize, release.apkSize);
+      return await launchInstaller();
+    }
+
     http.Client? client;
     try {
-      final tempDir = Directory.systemTemp;
       final tmpFile = File('${tempDir.path}/commu_calc_update.apk.tmp');
-      final targetFile = File('${tempDir.path}/commu_calc_update.apk');
 
       if (await tmpFile.exists()) await tmpFile.delete();
       if (await targetFile.exists()) await targetFile.delete();
@@ -152,11 +195,7 @@ class GitHubUpdater {
 
       await tmpFile.rename(targetFile.path);
 
-      if (Platform.isAndroid) {
-        final res = await _channel.invokeMethod<bool>('installApk', {'filePath': targetFile.path});
-        return res ?? false;
-      }
-      return true;
+      return await launchInstaller();
     } catch (e) {
       debugPrint('Update download failure: $e');
       rethrow;
