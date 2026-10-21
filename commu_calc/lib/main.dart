@@ -217,6 +217,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
               onPressed: isDownloading ? null : () => Navigator.pop(ctx),
               child: Text('Позже', style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
             ),
+            IconButton(
+              tooltip: 'Открыть ссылку в браузере',
+              icon: const Icon(Icons.open_in_browser_rounded, color: Color(0xFF38BDF8)),
+              onPressed: () => GitHubUpdater.openBrowser(release.apkAssetUrl),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF38BDF8),
@@ -261,7 +266,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> with SingleTickerPr
                       } catch (e) {
                         setDlgState(() {
                           isDownloading = false;
-                          statusText = 'Сбой: $e';
+                          statusText = 'Сбой: $e\nИспользуйте иконку браузера для прямой загрузки.';
                         });
                       }
                     },

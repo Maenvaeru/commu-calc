@@ -63,10 +63,11 @@ class MainActivity : FlutterActivity() {
                             }
                         }
 
+                        val canonicalFile = apkFile.canonicalFile
                         val apkUri = FileProvider.getUriForFile(
                             this,
                             "$packageName.fileprovider",
-                            apkFile
+                            canonicalFile
                         )
 
                         val installIntent = Intent(Intent.ACTION_VIEW).apply {
@@ -88,6 +89,18 @@ class MainActivity : FlutterActivity() {
                         result.success("INSTALLED")
                     } catch (e: Exception) {
                         result.error("INSTALL_ERROR", e.message, null)
+                    }
+                }
+                "openUrl" -> {
+                    val url = call.argument<String>("url")
+                    if (!url.isNullOrEmpty()) {
+                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        startActivity(browserIntent)
+                        result.success(true)
+                    } else {
+                        result.error("INVALID_URL", "URL пуст", null)
                     }
                 }
                 else -> result.notImplemented()

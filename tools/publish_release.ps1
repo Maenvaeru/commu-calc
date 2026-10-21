@@ -63,11 +63,15 @@ try {
     $releasePayload = @{
         tag_name = $Tag
         name = $Title
-        body = "Релиз с новым Cyber-Glass дизайном 2026, мониторингом дельты расхода и встроенным OTA-обновлением."
+        body = "Релиз v1.0.4: исправлен нативный FileProvider, обеспечена прямая совместимость Android OTA, внедрен резервный переход в браузер и скорректирована база расчетов."
         draft = $false
         prerelease = $false
     } | ConvertTo-Json -Depth 5
-    $release = Invoke-RestMethod -Uri $releasesUrl -Headers $headers -Method Post -Body $releasePayload
+    $releaseBytes = [System.Text.Encoding]::UTF8.GetBytes($releasePayload)
+    $releaseHeaders = @{}
+    foreach ($k in $headers.Keys) { $releaseHeaders[$k] = $headers[$k] }
+    $releaseHeaders["Content-Type"] = "application/json; charset=utf-8"
+    $release = Invoke-RestMethod -Uri $releasesUrl -Headers $releaseHeaders -Method Post -Body $releaseBytes
     Write-Host "Релиз успешно создан: ID $($release.id)" -ForegroundColor Green
 }
 

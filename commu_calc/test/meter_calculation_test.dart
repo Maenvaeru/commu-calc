@@ -160,10 +160,10 @@ void main() {
     });
 
     test('GitHubUpdater version comparison logic prevents loops', () {
-      expect(GitHubUpdater.isNewerVersion('v1.0.3', '1.0.2'), isTrue);
-      expect(GitHubUpdater.isNewerVersion('v1.0.2', '1.0.2'), isFalse);
-      expect(GitHubUpdater.isNewerVersion('v1.0.1', '1.0.2'), isFalse);
-      expect(GitHubUpdater.isNewerVersion('v1.0.0', '1.0.2'), isFalse);
+      expect(GitHubUpdater.isNewerVersion('v1.0.4', '1.0.3'), isTrue);
+      expect(GitHubUpdater.isNewerVersion('v1.0.4', '1.0.4'), isFalse);
+      expect(GitHubUpdater.isNewerVersion('v1.0.3', '1.0.4'), isFalse);
+      expect(GitHubUpdater.isNewerVersion('v1.0.2', '1.0.4'), isFalse);
     });
   });
 }

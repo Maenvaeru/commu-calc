@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 class ReleaseInfo {
   final String tagName;
@@ -21,7 +22,7 @@ class ReleaseInfo {
 }
 
 class GitHubUpdater {
-  static const String currentVersion = '1.0.3';
+  static const String currentVersion = '1.0.4';
   static const String owner = 'Maenvaeru';
   static const String repo = 'commu-calc';
   static const String token = '';
@@ -32,6 +33,15 @@ class GitHubUpdater {
         'User-Agent': 'CommuCalc-App',
         if (token.isNotEmpty) 'Authorization': 'token $token',
       };
+
+  static Future<File> get _targetApkFile async {
+    try {
+      final dir = await getTemporaryDirectory();
+      return File('${dir.path}/commu_calc_update.apk');
+    } catch (_) {
+      return File('${Directory.systemTemp.path}/commu_calc_update.apk');
+    }
+  }
 
   static Future<ReleaseInfo?> checkForUpdate() async {
     try {
@@ -68,10 +78,16 @@ class GitHubUpdater {
 
       if (apkUrl == null) return null;
 
+      String notes = data['body']?.toString() ?? '';
+      final questionCount = notes.split('?').length - 1;
+      if (notes.isEmpty || (notes.length > 10 && questionCount > notes.length * 0.2)) {
+        notes = 'Обновление алгоритмов расчета, исправление синхронизации и повышение стабильности.';
+      }
+
       return ReleaseInfo(
         tagName: tagName,
         title: data['name']?.toString() ?? tagName,
-        notes: data['body']?.toString() ?? '',
+        notes: notes,
         apkAssetUrl: apkUrl,
         apkSize: size,
       );
@@ -108,11 +124,13 @@ class GitHubUpdater {
 
   static Future<bool> isApkAlreadyDownloaded(ReleaseInfo release) async {
     try {
-      final targetFile = File('${Directory.systemTemp.path}/commu_calc_update.apk');
+      final targetFile = await _targetApkFile;
       if (await targetFile.exists()) {
         final length = await targetFile.length();
-        if (release.apkSize > 0 && (length == release.apkSize || length > 40000000)) {
+        if (release.apkSize > 0 && length == release.apkSize) {
           return true;
+        } else {
+          await targetFile.delete();
         }
       }
       return false;
@@ -132,9 +150,17 @@ class GitHubUpdater {
     await _channel.invokeMethod('openInstallSettings');
   }
 
+  static Future<void> openBrowser(String url) async {
+    try {
+      if (Platform.isAndroid) {
+        await _channel.invokeMethod('openUrl', {'url': url});
+      }
+    } catch (_) {}
+  }
+
   static Future<String> launchInstaller() async {
     if (!Platform.isAndroid) return 'INSTALLED';
-    final targetFile = File('${Directory.systemTemp.path}/commu_calc_update.apk');
+    final targetFile = await _targetApkFile;
     if (!await targetFile.exists()) {
       return 'FILE_NOT_FOUND';
     }
@@ -146,10 +172,9 @@ class GitHubUpdater {
     ReleaseInfo release, {
     required Function(double progress, int received, int total) onProgress,
   }) async {
-    final tempDir = Directory.systemTemp;
-    final targetFile = File('${tempDir.path}/commu_calc_update.apk');
+    final targetFile = await _targetApkFile;
 
-    // 1. Проверка локального кэша (Zero Waste)
+    // 1. Проверка локального кэша со строгой сверкой размера
     if (await isApkAlreadyDownloaded(release)) {
       onProgress(1.0, release.apkSize, release.apkSize);
       return await launchInstaller();
@@ -157,7 +182,7 @@ class GitHubUpdater {
 
     http.Client? client;
     try {
-      final tmpFile = File('${tempDir.path}/commu_calc_update.apk.tmp');
+      final tmpFile = File('${targetFile.path}.tmp');
 
       if (await tmpFile.exists()) await tmpFile.delete();
       if (await targetFile.exists()) await targetFile.delete();
