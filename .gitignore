@@ -1,0 +1,27 @@
+# Binary APKs and archives
+*.apk
+*.zip
+*.tar.gz
+
+# Flutter build artifacts
+commu_calc/build/
+commu_calc/.dart_tool/
+commu_calc/.flutter-plugins
+commu_calc/.flutter-plugins-dependencies
+
+# Android build artifacts
+commu_calc/android/.gradle/
+commu_calc/android/local.properties
+commu_calc/android/app/build/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Temp & logs & secrets
+*.tmp
+*.log
+*.token
+.github_token
+tools/.github_token
