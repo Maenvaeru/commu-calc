@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:commu_calc/models/meter_reading.dart';
 import 'package:commu_calc/services/meter_storage.dart';
+import 'package:commu_calc/services/github_updater.dart';
 
 void main() {
   group('MeterReading & ConsumptionTrend tests', () {
@@ -49,6 +50,14 @@ void main() {
       // Verify past delta for Light Day
       final pastDelta = last.lightDay - prev.lightDay;
       expect(pastDelta, 159);
+    });
+
+    test('GitHubUpdater detects published v1.0.1 release from GitHub', () async {
+      final update = await GitHubUpdater.checkForUpdate();
+      expect(update, isNotNull);
+      expect(update!.tagName, 'v1.0.1');
+      expect(update.apkAssetUrl, contains('commu-calc-v1.0.1.apk'));
+      expect(update.apkSize, greaterThan(40000000));
     });
   });
 }

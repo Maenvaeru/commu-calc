@@ -23,5 +23,7 @@
 20. **[Widget test ListView offscreen]:** Не найден виджет «Вода ХВС». Причина: экран 800x600 обрезал карточку. Решение: расширение тестового вьюпорта до 1080x2400.
 21. **[Gradle wrapper missing distributionUrl]:** Сборка APK падала с `No value with key distributionUrl`. Причина: пустая строка в файле. Решение: прописан URL Gradle 8.11.1-all.
 22. **[Flutter UI / Mobile Overflow]:** Вложенный `Row` с непереносимым текстом дельты в заголовке карточки вызывает горизонтальный `RenderFlex` оверфлоу на экранах <360dp. -> Использовать `Expanded` для заголовка и компактный бейдж `Было: X (±Y)`.
+23. **[GitHub API / Empty Repo 422]:** Создание релиза через `POST /repos/{owner}/{repo}/releases` возвращает `422 Repository is empty`, если в репозитории нет коммитов и ветки по умолчанию. -> Сначала выполнить initial commit и `git push -u origin main`.
+24. **[GitHub Push Protection / Secret Scan]:** Git push отклоняется (GH013), если коммит содержит hardcoded PAT token (`ghp_...`). -> Хранить токен локально в `.github_token` (в `.gitignore`), передавать через переменные окружения, в клиенте использовать открытый API для публичных репозиториев без передачи секрета.
 
 ## Зафиксированные инциденты и решения
